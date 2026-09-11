@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>縮尺のズレ補正 | 縮尺計算ツール</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=IBM+Plex+Mono:wght@500;600;700&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#fafaf7;
+    --grid-line: rgba(110,110,100,0.08);
+    --surface:#ffffff;
+    --surface-2:#f2f1ec;
+    --border:#e0ded5;
+    --border-strong:#c2bfb2;
+    --text:#2a2a26;
+    --text-muted:#84837a;
+    --accent:#8d8875;
+    --accent-strong:#5c584a;
+    --accent-soft:#e9e7dd;
+    --highlight:#787468;
+    --highlight-soft:#ecebe5;
+    --danger:#a8433a;
+    --shadow: 0 1px 2px rgba(40,40,36,0.06), 0 10px 26px -14px rgba(40,40,36,0.20);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#17170f;
+      --grid-line: rgba(200,198,184,0.06);
+      --surface:#211f18;
+      --surface-2:#28261e;
+      --border:#3a3830;
+      --border-strong:#4e4b40;
+      --text:#e6e4d9;
+      --text-muted:#a19d8c;
+      --accent:#a7a08a;
+      --accent-strong:#cfc7ab;
+      --accent-soft:#2e2c22;
+      --highlight:#9c9686;
+      --highlight-soft:#2a2820;
+      --danger:#e2857b;
+      --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 12px 28px -14px rgba(0,0,0,0.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#17170f;
+    --grid-line: rgba(200,198,184,0.06);
+    --surface:#211f18;
+    --surface-2:#28261e;
+    --border:#3a3830;
+    --border-strong:#4e4b40;
+    --text:#e6e4d9;
+    --text-muted:#a19d8c;
+    --accent:#a7a08a;
+    --accent-strong:#cfc7ab;
+    --accent-soft:#2e2c22;
+    --highlight:#9c9686;
+    --highlight-soft:#2a2820;
+    --danger:#e2857b;
+    --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 12px 28px -14px rgba(0,0,0,0.6);
+  }
+
+  *{box-sizing:border-box;}
+  html, body{ height:auto; }
+  body{
+    margin:0;
+    background-color:var(--bg);
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size:28px 28px;
+    color:var(--text);
+    font-family:"Public Sans","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+    padding:32px 16px 64px;
+  }
+  .page{
+    max-width:760px;
+    margin:0 auto;
+    display:flex;
+    flex-direction:column;
+    gap:24px;
+  }
+
+  .mono{ font-family:"IBM Plex Mono", ui-monospace, monospace; font-variant-numeric:tabular-nums; }
+
+  header.top{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .eyebrow{
+    font-family:"IBM Plex Mono", monospace;
+    font-size:12px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--accent);
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .eyebrow .ruler{
+    display:inline-flex;
+    align-items:flex-end;
+    gap:2px;
+    height:10px;
+  }
+  .eyebrow .ruler span{
+    width:1.5px;
+    background:var(--accent);
+    display:inline-block;
+  }
+  h1{
+    font-family:"Archivo","Public Sans",sans-serif;
+    font-weight:700;
+    font-size:clamp(26px,4vw,34px);
+    letter-spacing:-0.01em;
+    margin:0;
+    text-wrap:balance;
+  }
+  .sub{
+    color:var(--text-muted);
+    font-size:14.5px;
+    line-height:1.6;
+    max-width:56ch;
+  }
+
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:14px;
+    box-shadow:var(--shadow);
+    padding:22px;
+  }
+  .primary-card{
+    border-color:var(--border-strong);
+    border-width:1.5px;
+    padding:26px 26px 24px;
+    position:relative;
+    overflow:hidden;
+  }
+  .primary-card::before{
+    content:"";
+    position:absolute;
+    top:0; left:0; right:0;
+    height:4px;
+    background:linear-gradient(90deg, var(--accent), var(--accent-strong));
+  }
+  .primary-badge{
+    display:inline-block;
+    font-family:"IBM Plex Mono",monospace;
+    font-size:11px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--accent-strong);
+    background:var(--accent-soft);
+    border:1px solid var(--border-strong);
+    border-radius:999px;
+    padding:3px 10px;
+    margin-bottom:12px;
+  }
+  .primary-card .section-title{ font-size:19px; color:var(--accent-strong); }
+
+  .secondary-group{
+    border:none;
+  }
+  .secondary-group summary{
+    cursor:pointer;
+    list-style:none;
+    color:var(--text-muted);
+    font-size:13px;
+    font-weight:600;
+    letter-spacing:0.02em;
+    padding:10px 4px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    user-select:none;
+  }
+  .secondary-group summary::-webkit-details-marker{ display:none; }
+  .secondary-group summary::before{
+    content:"▸";
+    display:inline-block;
+    color:var(--accent);
+    transition:transform .15s ease;
+  }
+  .secondary-group[open] summary::before{ transform:rotate(90deg); }
+  .secondary-group summary:hover{ color:var(--text); }
+  .secondary-group[open] summary{ margin-bottom:16px; }
+  .secondary-group .secondary-card + .secondary-card{ margin-top:16px; }
+  .secondary-card{
+    box-shadow:none;
+    background:var(--surface-2);
+  }
+
+  .field-label{
+    font-size:12px;
+    font-weight:600;
+    letter-spacing:0.04em;
+    color:var(--text-muted);
+    text-transform:uppercase;
+    margin-bottom:10px;
+    display:block;
+  }
+
+  .scale-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:8px;
+  }
+  @media (max-width:520px){
+    .scale-grid{ grid-template-columns:repeat(2,1fr); }
+  }
+  .scale-btn{
+    appearance:none;
+    border:1px solid var(--border);
+    background:var(--surface-2);
+    color:var(--text);
+    border-radius:10px;
+    padding:10px 8px 9px;
+    cursor:pointer;
+    text-align:center;
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    transition:border-color .12s ease, background .12s ease, color .12s ease;
+  }
+  .scale-btn .num{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:16px;
+    font-weight:600;
+  }
+  .scale-btn .use{
+    font-size:11px;
+    color:var(--text-muted);
+  }
+  .scale-btn:hover{ border-color:var(--border-strong); }
+  .scale-btn.active{
+    background:var(--accent-soft);
+    border-color:var(--accent);
+    color:var(--accent-strong);
+  }
+  .scale-btn.active .use{ color:var(--accent-strong); opacity:.8; }
+  .scale-btn:disabled{ cursor:default; opacity:1; }
+
+  .custom-scale{
+    margin-top:10px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:14px;
+    color:var(--text-muted);
+  }
+  .custom-scale.active{ color:var(--text); }
+  .custom-scale input{
+    width:84px;
+  }
+  .add-scale-btn{
+    appearance:none;
+    border:1px solid var(--accent);
+    background:var(--accent-soft);
+    color:var(--accent-strong);
+    border-radius:8px;
+    padding:8px 12px;
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .add-scale-btn:hover{ background:var(--accent); color:var(--surface); }
+
+  .scale-chip{
+    position:relative;
+  }
+  .scale-chip .remove-chip{
+    position:absolute;
+    top:-6px;
+    right:-6px;
+    width:18px;
+    height:18px;
+    border-radius:50%;
+    border:1px solid var(--border-strong);
+    background:var(--surface);
+    color:var(--text-muted);
+    font-size:11px;
+    line-height:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+  }
+  .scale-chip .remove-chip:hover{ color:var(--danger); border-color:var(--danger); }
+
+  .compare-list{
+    margin-top:18px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .compare-row{
+    background:var(--accent-soft);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:12px 16px;
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:10px 20px;
+    flex-wrap:wrap;
+  }
+  .compare-row .denom{
+    font-family:"IBM Plex Mono",monospace;
+    font-weight:700;
+    font-size:15px;
+    color:var(--accent-strong);
+    min-width:64px;
+  }
+  .compare-row .value-m{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:22px;
+    font-weight:700;
+    color:var(--accent-strong);
+    flex:1;
+    text-align:right;
+  }
+  .compare-row .value-mm{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:13px;
+    color:var(--text-muted);
+    min-width:100px;
+    text-align:right;
+  }
+  .compare-empty{
+    color:var(--text-muted);
+    font-size:13px;
+    padding:6px 2px;
+  }
+
+  .mismatch-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:16px;
+  }
+  @media (max-width:520px){
+    .mismatch-grid{ grid-template-columns:1fr; }
+  }
+  .denom-input{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:15px;
+    color:var(--text-muted);
+  }
+  .denom-input input{
+    width:100%;
+    font-size:16px;
+  }
+
+  select{
+    font-family:"IBM Plex Mono",monospace;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:8px;
+    color:var(--text);
+    padding:7px 8px;
+    font-size:13px;
+    outline:none;
+  }
+  select:focus{
+    border-color:var(--accent);
+    box-shadow:0 0 0 3px var(--accent-soft);
+  }
+  td select{ width:100%; }
+
+  input[type="number"], input[type="text"]{
+    font-family:"IBM Plex Mono",monospace;
+    font-variant-numeric:tabular-nums;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:8px;
+    color:var(--text);
+    padding:9px 10px;
+    font-size:15px;
+    outline:none;
+  }
+  input[type="number"]:focus, input[type="text"]:focus{
+    border-color:var(--accent);
+    box-shadow:0 0 0 3px var(--accent-soft);
+  }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button{ margin-left:4px; }
+
+  .divider{
+    height:1px;
+    background:var(--border);
+    margin:20px 0;
+  }
+
+  .main-input-row{
+    display:flex;
+    align-items:flex-end;
+    gap:14px;
+    flex-wrap:wrap;
+  }
+  .main-input-row .grow{ flex:1 1 200px; }
+  #drawingLen{
+    width:100%;
+    font-size:22px;
+    padding:12px 14px;
+  }
+  .unit-tag{
+    color:var(--text-muted);
+    font-size:13px;
+    margin-top:6px;
+  }
+
+  .result{
+    margin-top:18px;
+    background:var(--accent-soft);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:18px 20px;
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    flex-wrap:wrap;
+    gap:10px 24px;
+  }
+  .result .label{
+    font-size:12px;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    color:var(--text-muted);
+  }
+  .result .value-m{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:34px;
+    font-weight:700;
+    color:var(--accent-strong);
+    line-height:1;
+  }
+  .result .value-mm{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:15px;
+    color:var(--text-muted);
+  }
+
+  h2.section-title{
+    font-family:"Archivo",sans-serif;
+    font-size:16px;
+    font-weight:700;
+    margin:0 0 4px;
+  }
+  .section-sub{
+    color:var(--text-muted);
+    font-size:13px;
+    margin-bottom:14px;
+  }
+
+  table{
+    width:100%;
+    border-collapse:collapse;
+  }
+  th{
+    text-align:left;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--text-muted);
+    font-weight:600;
+    padding:0 8px 8px;
+    border-bottom:1px solid var(--border);
+  }
+  th.num, td.num{ text-align:right; }
+  td{
+    padding:8px;
+    border-bottom:1px solid var(--border);
+    vertical-align:middle;
+  }
+  tr:last-child td{ border-bottom:none; }
+  td input[type="text"]{ width:100%; font-family:inherit; font-size:14px; }
+  td input[type="number"]{ width:100px; text-align:right; }
+  td.result-cell{
+    font-family:"IBM Plex Mono",monospace;
+    font-variant-numeric:tabular-nums;
+    color:var(--accent-strong);
+    font-weight:600;
+    white-space:nowrap;
+  }
+  .row-delete{
+    appearance:none;
+    background:none;
+    border:none;
+    color:var(--text-muted);
+    cursor:pointer;
+    font-size:16px;
+    line-height:1;
+    padding:4px 6px;
+    border-radius:6px;
+  }
+  .row-delete:hover{ color:var(--danger); background:var(--highlight-soft); }
+
+  .add-row-btn{
+    appearance:none;
+    margin-top:12px;
+    background:var(--surface-2);
+    border:1px dashed var(--accent);
+    color:var(--accent-strong);
+    font-weight:600;
+    border-radius:8px;
+    padding:9px 14px;
+    font-size:13px;
+    cursor:pointer;
+    width:100%;
+    text-align:center;
+  }
+  .add-row-btn:hover{ background:var(--accent-soft); border-style:solid; }
+
+  .table-wrap{ overflow-x:auto; }
+
+  footer.note{
+    font-size:12.5px;
+    color:var(--text-muted);
+    line-height:1.7;
+    padding:0 4px;
+  }
+
+  :focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ transition:none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <header class="top">
+    <div class="eyebrow">
+      <span class="ruler" aria-hidden="true">
+        <span style="height:100%"></span><span style="height:40%"></span><span style="height:40%"></span><span style="height:40%"></span><span style="height:70%"></span><span style="height:40%"></span><span style="height:40%"></span><span style="height:40%"></span><span style="height:100%"></span>
+      </span>
+      Scale Calculator
+    </div>
+    <h1>縮尺計算</h1>
+    <p class="sub">図面の実際の縮尺と、手元のスケール定規の目盛りが違うとき、正しい実寸に補正します。複数縮尺の比較やまとめ計算は下の「その他の機能」からどうぞ。</p>
+  </header>
+
+  <section class="card primary-card">
+    <div class="primary-badge">メインツール</div>
+    <h2 class="section-title">縮尺のズレ補正</h2>
+    <div class="section-sub">図面は別の縮尺なのに、手元のスケール定規が別の目盛りしかない場合に、正しい実寸へ補正します。</div>
+
+    <div class="mismatch-grid">
+      <div>
+        <span class="field-label">図面の実際の縮尺</span>
+        <div class="denom-input">
+          <span>1 /</span>
+          <input type="number" id="drawingDenom" min="1" step="any" />
+        </div>
+      </div>
+      <div>
+        <span class="field-label">使ったスケールの縮尺</span>
+        <div class="denom-input">
+          <span>1 /</span>
+          <input type="number" id="rulerDenom" min="1" step="any" />
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <span class="field-label">スケールで読み取った実寸</span>
+    <div class="main-input-row">
+      <div class="grow">
+        <input type="number" id="misreadMm" inputmode="decimal" step="any" placeholder="0" />
+        <div class="unit-tag">単位：mm（間違った縮尺のスケールを当てて読んだ、見かけ上の実寸）</div>
+      </div>
+    </div>
+
+    <div class="result" id="mismatchResult">
+      <div>
+        <div class="label">補正後の正しい実寸</div>
+        <div class="value-m mono" id="mismatchM">0 m</div>
+      </div>
+      <div class="value-mm mono" id="mismatchMm">0 mm</div>
+    </div>
+    <div class="unit-tag" id="mismatchFactor" style="margin-top:8px;"></div>
+  </section>
+
+  <details class="secondary-group">
+    <summary>その他の機能（複数縮尺の比較・まとめて計算）</summary>
+
+    <section class="card secondary-card">
+      <span class="field-label">比較する縮尺</span>
+      <div class="scale-grid" id="scaleGrid"></div>
+      <div class="custom-scale">
+        <span>縮尺を追加：1 /</span>
+        <input type="number" id="customDenom" min="1" step="1" placeholder="例 30" />
+        <button class="add-scale-btn" id="addScaleBtn" type="button">＋ 追加</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <span class="field-label">図面上の寸法</span>
+      <div class="main-input-row">
+        <div class="grow">
+          <input type="number" id="drawingLen" inputmode="decimal" step="any" placeholder="0" />
+          <div class="unit-tag">単位：mm（図面上でスケールや定規で測った長さ）</div>
+        </div>
+      </div>
+
+      <div class="compare-list" id="compareList"></div>
+    </section>
+
+    <section class="card secondary-card">
+      <h2 class="section-title">まとめて計算</h2>
+      <div class="section-sub">寸法ごとに縮尺を変えて、複数箇所を一覧で計算したいときに使用</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:34%">メモ</th>
+              <th class="num">図面寸法 (mm)</th>
+              <th style="width:88px">縮尺</th>
+              <th class="num">実寸</th>
+              <th style="width:36px"></th>
+            </tr>
+          </thead>
+          <tbody id="rowsBody"></tbody>
+        </table>
+      </div>
+      <button class="add-row-btn" id="addRowBtn" type="button">＋ 行を追加</button>
+    </section>
+  </details>
+
+  <footer class="note">
+    実寸 = 図面寸法 × 縮尺の分母（例：1/100 の図面で 120mm と測った場合 → 120 × 100 = 12,000mm = 12.0m）。数値は入力するたびに自動で再計算されます。
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  var USE_LABELS = { 50:'矩計図・詳細図', 100:'平面図・立面図', 200:'配置図', 500:'案内図' };
+
+  var state = {
+    scales: [
+      { denom:50, builtin:true },
+      { denom:100, builtin:true },
+      { denom:200, builtin:true },
+      { denom:500, builtin:true }
+    ],
+    rows: []
+  };
+  var rowIdSeq = 1;
+
+  var scaleGrid = document.getElementById('scaleGrid');
+  var customDenomInput = document.getElementById('customDenom');
+  var addScaleBtn = document.getElementById('addScaleBtn');
+  var drawingLenInput = document.getElementById('drawingLen');
+  var compareList = document.getElementById('compareList');
+  var rowsBody = document.getElementById('rowsBody');
+  var addRowBtn = document.getElementById('addRowBtn');
+
+  function fmt(n, maxFrac){
+    if (!isFinite(n)) return '0';
+    return n.toLocaleString('ja-JP', { maximumFractionDigits: maxFrac, minimumFractionDigits: 0 });
+  }
+
+  function sortedScales(){
+    return state.scales.slice().sort(function(a,b){ return a.denom - b.denom; });
+  }
+
+  function actualFor(mm, denom){
+    if (!isFinite(mm)) return { m:0, mm:0, valid:false };
+    var actualMm = mm * denom;
+    return { m: actualMm/1000, mm: actualMm, valid:true };
+  }
+
+  function renderScaleChips(){
+    scaleGrid.innerHTML = '';
+    sortedScales().forEach(function(s){
+      var wrap = document.createElement('div');
+      wrap.className = 'scale-chip';
+
+      var btn = document.createElement('button');
+      btn.className = 'scale-btn active';
+      btn.type = 'button';
+      btn.disabled = true;
+
+      var num = document.createElement('span');
+      num.className = 'num';
+      num.textContent = '1/' + s.denom;
+      var use = document.createElement('span');
+      use.className = 'use';
+      use.textContent = USE_LABELS[s.denom] || 'カスタム';
+
+      btn.appendChild(num);
+      btn.appendChild(use);
+      wrap.appendChild(btn);
+
+      if (state.scales.length > 1){
+        var rm = document.createElement('button');
+        rm.type = 'button';
+        rm.className = 'remove-chip';
+        rm.setAttribute('aria-label', '1/' + s.denom + ' を削除');
+        rm.textContent = '✕';
+        rm.addEventListener('click', function(){
+          state.scales = state.scales.filter(function(x){ return x.denom !== s.denom; });
+          var fallback = sortedScales()[0].denom;
+          state.rows.forEach(function(r){ if (r.denom === s.denom) r.denom = fallback; });
+          renderScaleChips();
+          renderCompareList();
+          renderRows();
+        });
+        wrap.appendChild(rm);
+      }
+
+      scaleGrid.appendChild(wrap);
+    });
+  }
+
+  function addCustomScale(){
+    var v = parseFloat(customDenomInput.value);
+    if (!(v > 0) || !isFinite(v)) return;
+    v = Math.round(v * 100) / 100;
+    if (!state.scales.some(function(s){ return s.denom === v; })){
+      state.scales.push({ denom:v, builtin:false });
+    }
+    customDenomInput.value = '';
+    renderScaleChips();
+    renderCompareList();
+    renderRows();
+  }
+  addScaleBtn.addEventListener('click', addCustomScale);
+  customDenomInput.addEventListener('keydown', function(e){
+    if (e.key === 'Enter'){ e.preventDefault(); addCustomScale(); }
+  });
+
+  function renderCompareList(){
+    compareList.innerHTML = '';
+    var mm = parseFloat(drawingLenInput.value);
+    var scales = sortedScales();
+    if (!scales.length){
+      var empty = document.createElement('div');
+      empty.className = 'compare-empty';
+      empty.textContent = '比較する縮尺を追加してください。';
+      compareList.appendChild(empty);
+      return;
+    }
+    scales.forEach(function(s){
+      var r = actualFor(mm, s.denom);
+      var row = document.createElement('div');
+      row.className = 'compare-row';
+
+      var denom = document.createElement('div');
+      denom.className = 'denom';
+      denom.textContent = '1/' + s.denom;
+
+      var m = document.createElement('div');
+      m.className = 'value-m';
+      m.textContent = r.valid ? fmt(r.m,3) + ' m' : '—';
+
+      var mmEl = document.createElement('div');
+      mmEl.className = 'value-mm';
+      mmEl.textContent = r.valid ? fmt(r.mm,1) + ' mm' : '';
+
+      row.appendChild(denom);
+      row.appendChild(m);
+      row.appendChild(mmEl);
+      compareList.appendChild(row);
+    });
+  }
+  drawingLenInput.addEventListener('input', renderCompareList);
+
+  function renderRows(){
+    rowsBody.innerHTML = '';
+    state.rows.forEach(function(row){
+      var tr = document.createElement('tr');
+      tr.dataset.id = row.id;
+
+      var tdLabel = document.createElement('td');
+      var labelInput = document.createElement('input');
+      labelInput.type = 'text';
+      labelInput.placeholder = '例：通り芯間隔';
+      labelInput.value = row.label;
+      labelInput.addEventListener('input', function(){ row.label = labelInput.value; });
+      tdLabel.appendChild(labelInput);
+
+      var tdMm = document.createElement('td');
+      tdMm.className = 'num';
+      var mmInput = document.createElement('input');
+      mmInput.type = 'number';
+      mmInput.step = 'any';
+      mmInput.placeholder = '0';
+      mmInput.value = row.mmValue;
+      mmInput.addEventListener('input', function(){
+        row.mmValue = mmInput.value;
+        updateRowResult(tr, row);
+      });
+      tdMm.appendChild(mmInput);
+
+      var tdScale = document.createElement('td');
+      var sel = document.createElement('select');
+      sortedScales().forEach(function(s){
+        var opt = document.createElement('option');
+        opt.value = s.denom;
+        opt.textContent = '1/' + s.denom;
+        if (s.denom === row.denom) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      sel.addEventListener('change', function(){
+        row.denom = parseFloat(sel.value);
+        updateRowResult(tr, row);
+      });
+      tdScale.appendChild(sel);
+
+      var tdResult = document.createElement('td');
+      tdResult.className = 'num result-cell';
+
+      var tdDel = document.createElement('td');
+      var delBtn = document.createElement('button');
+      delBtn.className = 'row-delete';
+      delBtn.type = 'button';
+      delBtn.setAttribute('aria-label', '行を削除');
+      delBtn.textContent = '✕';
+      delBtn.addEventListener('click', function(){
+        state.rows = state.rows.filter(function(r){ return r.id !== row.id; });
+        renderRows();
+      });
+      tdDel.appendChild(delBtn);
+
+      tr.appendChild(tdLabel);
+      tr.appendChild(tdMm);
+      tr.appendChild(tdScale);
+      tr.appendChild(tdResult);
+      tr.appendChild(tdDel);
+      rowsBody.appendChild(tr);
+
+      updateRowResult(tr, row);
+    });
+  }
+
+  function updateRowResult(tr, row){
+    var tdResult = tr.querySelector('.result-cell');
+    var mm = parseFloat(row.mmValue);
+    var r = actualFor(mm, row.denom);
+    tdResult.textContent = r.valid ? (fmt(r.m,3) + ' m') : '—';
+  }
+
+  addRowBtn.addEventListener('click', function(){
+    state.rows.push({ id: rowIdSeq++, label:'', mmValue:'', denom: sortedScales()[0].denom });
+    renderRows();
+  });
+
+  state.rows.push({ id: rowIdSeq++, label:'外壁芯々（南面）', mmValue:'182', denom:100 });
+  state.rows.push({ id: rowIdSeq++, label:'配置図の敷地境界', mmValue:'96', denom:200 });
+
+  renderScaleChips();
+  drawingLenInput.value = '182';
+  renderCompareList();
+  renderRows();
+
+  var drawingDenomInput = document.getElementById('drawingDenom');
+  var rulerDenomInput = document.getElementById('rulerDenom');
+  var misreadMmInput = document.getElementById('misreadMm');
+  var mismatchM = document.getElementById('mismatchM');
+  var mismatchMm = document.getElementById('mismatchMm');
+  var mismatchFactor = document.getElementById('mismatchFactor');
+
+  function recalcMismatch(){
+    var drawingDenom = parseFloat(drawingDenomInput.value);
+    var rulerDenom = parseFloat(rulerDenomInput.value);
+    var misreadMm = parseFloat(misreadMmInput.value);
+
+    if (!(drawingDenom > 0) || !(rulerDenom > 0)){
+      mismatchM.textContent = '—';
+      mismatchMm.textContent = '';
+      mismatchFactor.textContent = '';
+      return;
+    }
+    var factor = drawingDenom / rulerDenom;
+    var correctMm = isFinite(misreadMm) ? misreadMm * factor : 0;
+
+    mismatchM.textContent = fmt(correctMm / 1000, 3) + ' m';
+    mismatchMm.textContent = fmt(correctMm, 1) + ' mm';
+    mismatchFactor.textContent = '補正倍率：×' + fmt(factor, 4) +
+      '（1/' + fmt(rulerDenom,2) + 'の目盛りで読んだ値を、実際の縮尺1/' + fmt(drawingDenom,2) + 'に補正）';
+  }
+
+  [drawingDenomInput, rulerDenomInput, misreadMmInput].forEach(function(el){
+    el.addEventListener('input', recalcMismatch);
+  });
+
+  drawingDenomInput.value = '250';
+  rulerDenomInput.value = '100';
+  misreadMmInput.value = '6500';
+  recalcMismatch();
+})();
+</script>
+</body>
+</html>
