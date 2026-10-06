@@ -291,6 +291,38 @@
   }
   .scale-chip .remove-chip:hover{ color:var(--danger); border-color:var(--danger); }
 
+  .preset-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    margin-top:10px;
+  }
+  .preset-btn{
+    appearance:none;
+    border:1px solid var(--border);
+    background:var(--surface-2);
+    color:var(--text);
+    border-radius:999px;
+    padding:5px 12px;
+    font-family:"IBM Plex Mono",monospace;
+    font-size:12.5px;
+    cursor:pointer;
+    transition:border-color .12s ease, background .12s ease, color .12s ease;
+  }
+  .preset-btn:hover{ border-color:var(--border-strong); }
+  .preset-btn.active{
+    background:var(--accent-soft);
+    border-color:var(--accent);
+    color:var(--accent-strong);
+    font-weight:600;
+  }
+  .warn-note{
+    margin-top:8px;
+    font-size:12.5px;
+    line-height:1.6;
+    color:var(--danger);
+  }
+
   .compare-list{
     margin-top:18px;
     display:flex;
@@ -351,6 +383,7 @@
     font-size:15px;
     color:var(--text-muted);
   }
+  .denom-input > span{ white-space:nowrap; }
   .denom-input input{
     width:100%;
     font-size:16px;
@@ -544,7 +577,7 @@
       Scale Calculator
     </div>
     <h1>縮尺計算</h1>
-    <p class="sub">図面の実際の縮尺と、手元のスケール定規の目盛りが違うとき、正しい実寸に補正します。複数縮尺の比較やまとめ計算は下の「その他の機能」からどうぞ。</p>
+    <p class="sub">図面の実際の縮尺と、手元のスケール定規の目盛りが違うとき、正しい実寸に補正します。いろんな縮尺の図面を 1/100 に揃える変換もできます。複数縮尺の比較やまとめ計算は下の「その他の機能」からどうぞ。</p>
   </header>
 
   <section class="card primary-card">
@@ -587,6 +620,58 @@
       <div class="value-mm mono" id="mismatchMm">0 mm</div>
     </div>
     <div class="unit-tag" id="mismatchFactor" style="margin-top:8px;"></div>
+  </section>
+
+  <section class="card">
+    <h2 class="section-title">1/100 に変換</h2>
+    <div class="section-sub">いろんな縮尺の図面を 1/100 として扱うための、拡大コピーの倍率と、紙の上の寸法を出します。</div>
+
+    <div class="mismatch-grid">
+      <div>
+        <span class="field-label">元の図面の縮尺</span>
+        <div class="denom-input">
+          <span>1 /</span>
+          <input type="number" id="cnvFromDenom" min="1" step="any" />
+        </div>
+        <div class="preset-row" id="cnvPresetRow"></div>
+      </div>
+      <div>
+        <span class="field-label">変換先の縮尺</span>
+        <div class="denom-input">
+          <span>1 /</span>
+          <input type="number" id="cnvToDenom" min="1" step="any" />
+        </div>
+        <div class="unit-tag">通常は 100 のままで使います。</div>
+      </div>
+    </div>
+
+    <div class="result">
+      <div>
+        <div class="label">印刷・コピーの倍率</div>
+        <div class="value-m mono" id="cnvZoom">—</div>
+      </div>
+      <div class="value-mm mono" id="cnvZoomX"></div>
+    </div>
+    <div class="unit-tag" id="cnvNote" style="margin-top:8px;"></div>
+    <div class="warn-note" id="cnvWarn" hidden></div>
+
+    <div class="divider"></div>
+
+    <span class="field-label">図面上で測った長さ（任意）</span>
+    <div class="main-input-row">
+      <div class="grow">
+        <input type="number" id="cnvDrawMm" inputmode="decimal" step="any" placeholder="0" />
+        <div class="unit-tag">単位：mm（元の図面を定規で測った、紙の上での長さ）</div>
+      </div>
+    </div>
+
+    <div class="result">
+      <div>
+        <div class="label">変換後の図面での長さ</div>
+        <div class="value-m mono" id="cnvPaperMm">—</div>
+      </div>
+      <div class="value-mm mono" id="cnvReal"></div>
+    </div>
   </section>
 
   <details class="secondary-group">
@@ -898,6 +983,105 @@
   rulerDenomInput.value = '100';
   misreadMmInput.value = '6500';
   recalcMismatch();
+
+  // --- 1/100 に変換（印刷倍率・紙の上の寸法） ---
+  var cnvFromDenom = document.getElementById('cnvFromDenom');
+  var cnvToDenom   = document.getElementById('cnvToDenom');
+  var cnvDrawMm    = document.getElementById('cnvDrawMm');
+  var cnvZoom      = document.getElementById('cnvZoom');
+  var cnvZoomX     = document.getElementById('cnvZoomX');
+  var cnvNote      = document.getElementById('cnvNote');
+  var cnvWarn      = document.getElementById('cnvWarn');
+  var cnvPaperMm   = document.getElementById('cnvPaperMm');
+  var cnvReal      = document.getElementById('cnvReal');
+  var cnvPresetRow = document.getElementById('cnvPresetRow');
+
+  // 縮尺の分母は桁区切りなしで出す（1/1,000 だと縮尺として読みにくいため）
+  function fmtDenom(n){
+    if (!isFinite(n)) return '0';
+    return n.toLocaleString('ja-JP', { maximumFractionDigits: 2, useGrouping: false });
+  }
+
+  var CNV_PRESETS = [30, 50, 150, 200, 250, 500, 1000];
+  // コピー機でよく使われる倍率の上限・下限。これを外れたら一度で変換できない
+  var COPIER_MAX = 400, COPIER_MIN = 25;
+
+  CNV_PRESETS.forEach(function(d){
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'preset-btn';
+    b.dataset.denom = d;
+    b.textContent = '1/' + d;
+    b.addEventListener('click', function(){
+      cnvFromDenom.value = d;
+      recalcConvert();
+    });
+    cnvPresetRow.appendChild(b);
+  });
+
+  function markPresets(from){
+    var btns = cnvPresetRow.querySelectorAll('.preset-btn');
+    for (var i = 0; i < btns.length; i++){
+      btns[i].classList.toggle('active', parseFloat(btns[i].dataset.denom) === from);
+    }
+  }
+
+  function clearConvert(){
+    cnvZoom.textContent = '—';
+    cnvZoomX.textContent = '';
+    cnvNote.textContent = '';
+    cnvWarn.hidden = true;
+    cnvPaperMm.textContent = '—';
+    cnvReal.textContent = '';
+  }
+
+  function recalcConvert(){
+    var from = parseFloat(cnvFromDenom.value);
+    var to   = parseFloat(cnvToDenom.value);
+    markPresets(from);
+
+    if (!(from > 0) || !(to > 0)){ clearConvert(); return; }
+
+    var zoom = from / to;              // 1/from の図面を 1/to にするための倍率
+    var pct  = zoom * 100;
+
+    cnvZoom.textContent  = fmt(pct, 2) + ' %';
+    cnvZoomX.textContent = '×' + fmt(zoom, 4);
+
+    if (zoom === 1){
+      cnvNote.textContent = 'すでに 1/' + fmtDenom(to) + ' の図面です。変換は不要です。';
+    } else {
+      cnvNote.textContent = '1/' + fmtDenom(from) + ' の図面を ' + fmt(pct,2) + '% で' +
+        (zoom > 1 ? '拡大' : '縮小') + 'コピーすると 1/' + fmtDenom(to) + ' になり、' +
+        '1/' + fmtDenom(to) + ' のスケールをそのまま当てられます。';
+    }
+
+    if (pct > COPIER_MAX || pct < COPIER_MIN){
+      cnvWarn.hidden = false;
+      cnvWarn.textContent = '一般的なコピー機の倍率（' + COPIER_MIN + '〜' + COPIER_MAX +
+        '%）の範囲外です。一度では変換できないため、複数回に分けるか、図面の縮尺を見直してください。';
+    } else {
+      cnvWarn.hidden = true;
+    }
+
+    var drawMm = parseFloat(cnvDrawMm.value);
+    if (isFinite(drawMm)){
+      cnvPaperMm.textContent = fmt(drawMm * zoom, 2) + ' mm';
+      cnvReal.textContent    = '実寸 ' + fmt(drawMm * from / 1000, 3) + ' m';
+    } else {
+      cnvPaperMm.textContent = '—';
+      cnvReal.textContent    = '';
+    }
+  }
+
+  [cnvFromDenom, cnvToDenom, cnvDrawMm].forEach(function(el){
+    el.addEventListener('input', recalcConvert);
+  });
+
+  // initial example: 1/250 の図面を 1/100 に
+  cnvFromDenom.value = '250';
+  cnvToDenom.value   = '100';
+  recalcConvert();
 })();
 </script>
 </body>
